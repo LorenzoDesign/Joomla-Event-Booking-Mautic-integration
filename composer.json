@@ -1,0 +1,20 @@
+{
+    "name": "lorenzogiovannini/mautic",
+    "description": "link event booking to mautic",
+    "autoload": {
+        "psr-4": {
+            "Lorenzogiovannini\\Mautic\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Lorenzo Giovannini",
+            "email": "viruzz15@gmail.com"
+        }
+    ],
+    "require": {
+        "mautic/api-library": "^3.1",
+        "guzzlehttp/guzzle": "^7.3",
+        "psr/log": "^3.0"
+    }
+}

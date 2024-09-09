@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension version="3.9.0" type="plugin" group="eventbooking" method="upgrade">
+    <name>Events Booking - Mautic API</name>
+    <author>Lorenzo Giovannini</author>
+    <creationDate>September 2024</creationDate>
+    <copyright>Istituto Medicina Naturale</copyright>
+    <license>http://www.gnu.org/licenses/gpl-2.0.html GNU/GPL</license>
+    <authorEmail>lorenzo@istitutomedicinanaturale.it</authorEmail>
+    <authorUrl>www.istitutomedicinanaturale.it</authorUrl>
+    <version>3.00.0</version>  
+    <description>Questo Plugin integra Mautic a Event Booking: chi paga viene aggiunto ai contatti mautic in un segmento che puo essere scelto nella scheda evento
+    </description>
+    <files>
+        <filename plugin="mautic">mautic.php</filename>
+        <filename plugin="mautic">composer.json</filename>
+        <filename plugin="mautic">composer.lock</filename>
+        <folder>vendor</folder>
+        <folder>src</folder>
+    </files>
+
+    <config>
+        <fields name="params">
+            <fieldset name="basic">
+                <field name="mauticUserName" type="text" default="username" label="Mautic Username" description="inserisci il nome utente di mautic" size="10" />
+                <field name="mauticPassword" type="password" default="password" label="Mautic password" description="inserisci la password relativa all'utente" size="10" />
+                <field name="mauticBaseUrl" type="text" default="https://" label="Mautic Base Url" description="es: https://miomautic.com" size="15" />
+                <field name="proprieta" type="text" default="Azienda" label="Proprietà contatto" description="Biosalus.Net, Biosalus Festival" size="15" />
+            </fieldset>
+        </fields>
+    </config>
+</extension>
