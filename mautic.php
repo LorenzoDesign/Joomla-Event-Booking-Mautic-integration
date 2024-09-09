@@ -17,7 +17,7 @@ use Joomla\Registry\Registry;
 use Joomla\CMS\Http\HttpFactory;
 use Mautic\Auth\ApiAuth;
 use Mautic\MauticApi;
-use Joomla\CMS\Mylib\Log\Log;
+use Lorenzogiovannini\Mautic\Log;
 use Joomla\CMS\Uri\Uri as CMSUri;
 
 class plgEventbookingMautic extends JPlugin

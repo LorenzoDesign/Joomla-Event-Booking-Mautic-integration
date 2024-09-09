@@ -1,5 +1,5 @@
 {
-    "name": "lorenzogiovannini/mautic",
+    "name": "lorenzogiovannini/eb-mautic",
     "description": "link event booking to mautic",
     "autoload": {
         "psr-4": {
