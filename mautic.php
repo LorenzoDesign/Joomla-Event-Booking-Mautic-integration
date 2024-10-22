@@ -19,6 +19,7 @@ use Mautic\Auth\ApiAuth;
 use Mautic\MauticApi;
 use Lorenzogiovannini\Mautic\Log;
 use Joomla\CMS\Uri\Uri as CMSUri;
+use Joomla\CMS\Factory;
 
 class plgEventbookingMautic extends JPlugin
 {
@@ -264,7 +265,11 @@ class plgEventbookingMautic extends JPlugin
         $segments = self::getSegments();
         $mauticTags = self::getTags($auth);
         $mauticCampains = self::getCampains($auth);
-        
+
+        //se i segmenti sono vuoti O i tags sono vuoti O le campagne sono vuote manda messaggio
+        if (is_null($segments) OR is_null($mauticTags) OR is_null($mauticCampains)) {
+            $application = Factory::getApplication();
+            $application->enqueueMessage('<b>Mautic connection problem.</b> Check plugin settings', 'error');        }
         //carico i paramtri salvati
         $eventParams = self::getEventParams($row);
         $tagsIds = explode(',', $eventParams["tagsMautic"]);
