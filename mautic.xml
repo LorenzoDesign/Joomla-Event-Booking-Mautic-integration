@@ -2,13 +2,13 @@
 <extension version="3.9.0" type="plugin" group="eventbooking" method="upgrade">
     <name>Events Booking - Mautic API</name>
     <author>Lorenzo Giovannini</author>
-    <creationDate>September 2024</creationDate>
+    <creationDate>May 2025</creationDate>
     <copyright>Istituto Medicina Naturale</copyright>
     <license>http://www.gnu.org/licenses/gpl-2.0.html GNU/GPL</license>
     <authorEmail>lorenzo@istitutomedicinanaturale.it</authorEmail>
     <authorUrl>www.istitutomedicinanaturale.it</authorUrl>
-    <version>3.00.0</version>  
-    <description>Questo Plugin integra Mautic a Event Booking: chi paga viene aggiunto ai contatti mautic in un segmento che puo essere scelto nella scheda evento
+    <version>3.1.0</version>  
+    <description>Questo Plugin integra Mautic 5 a Event Booking: chi paga viene aggiunto ai contatti mautic in un segmento che puo essere scelto nella scheda evento, gli viene assegnato un tag, un punteggio ed uno stage
     </description>
     <files>
         <filename plugin="mautic">mautic.php</filename>

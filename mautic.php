@@ -19,7 +19,6 @@ use Mautic\Auth\ApiAuth;
 use Mautic\MauticApi;
 use Lorenzogiovannini\Mautic\Log;
 use Joomla\CMS\Uri\Uri as CMSUri;
-use Joomla\CMS\Factory;
 
 class plgEventbookingMautic extends JPlugin
 {
@@ -102,8 +101,7 @@ class plgEventbookingMautic extends JPlugin
         ob_start();
 		$this->drawSettingForm($row);
 
-		return array('title' => '<i class="fas fa-mail-bulk"></i> Mautic',
-		             'form'  => ob_get_clean(),
+		return array('title' => '<i class="fas fa-mail-bulk" style="color: #0056eb;"></i>  Mautic', 'form'  => ob_get_clean(),
         );
 	}
 
@@ -125,6 +123,10 @@ class plgEventbookingMautic extends JPlugin
         $params->set('attivazioneMautic', $data['attivazioneMautic']);
         // salvo id segmento
         $params->set('segmentoMautic', $data['segmentoMautic']);
+        // salvo id stage
+        $params->set('stageMautic', $data['stageMautic']);
+        // salvo punti
+        $params->set('puntiPagante', $data['puntiPagante']);
         // salvo tags
         if (isset($data['tagsMautic']))
         {
@@ -177,6 +179,8 @@ class plgEventbookingMautic extends JPlugin
             $segmentoMauticId = $eventParams->get('segmentoMautic');
             $tagsMauticIds = $eventParams->get('tagsMautic');
             $campagnaMauticId = $eventParams->get('campainsMautic');;
+            $puntiDaAssegnare = $eventParams->get('puntiPagante');;
+            $stageDaAssegnare = $eventParams->get('stageMautic');;
 
             $auth = self::authConfig();
 
@@ -192,64 +196,37 @@ class plgEventbookingMautic extends JPlugin
                 'address1'  => $campiUtente["Indirizzo"],
                 'city'      => $campiUtente["Citta"],
                 'zipcode'   => $campiUtente["CAP"],
-                'company'   => $this->property,
                 'tags'      => $tagsMauticIds,
                 'overwriteWithBlank' => false
             );
 
             //cerco utente in mautic
-            $api        = new MauticApi();
-            $contactApi = $api->newApi("contacts", $auth, $this->baseUrl);
-            $searchFilter = 'email:'.$row->email;
+            $mauticUserId = self::getMauticUserId($auth,$mauticUser, $row);
 
-            $contacts = $contactApi->getList($searchFilter, $start, $limit, $orderBy, $orderByDir, $publishedOnly, true);
-
-            //se non esiste lo creo
-            if ($contacts["total"] == 0) {
-                // creazione utente
-                $contact = $contactApi->create($mauticUser);
-                $mauticUserId = $contact["contact"]["id"];
-            } else {
-                //se esiste lo aggiorno
-                $propertiesNames = array_keys($contacts["contacts"]);
-                $mauticUserId = $propertiesNames[0];
-                if (!is_null($mauticUserId)) {
-                    // 
-                    $createIfNotFound = true;
-                    $contact = $contactApi->edit($mauticUserId, $mauticUser, $createIfNotFound);
-                    $mauticUserId = $contact["contact"]["id"];
-                    //log
-                }
+            // assegno utente a company
+            if (!is_null($mauticUserId)) {
+                $companyId = 4;
+                $assegnaCompany = self::assegnaUtenteCompany($auth, $mauticUserId, $companyId);
             }
             
+            // assegna utente a segmento
             if (!is_null($mauticUserId) && !is_null($segmentoMauticId)) {
-                // assegna utente a segmento
-                $segmentApi = $api->newApi("segments", $auth, $this->baseUrl);
-                $response = $segmentApi->addContact($segmentoMauticId, $mauticUserId);
-                
-                // handle error
-                if (!isset($response['success'])) {
-                    $logMsg = 'ERR assegna utente a segmento: code'.$response["errors"][0]["code"].' - '.$response["errors"][0]["message"];
-                    Log::logData($logFile, $mauticUser, $logMsg);
-                } else {
-                    $logMsg = ' assegna utente a segmento: '.$segmentoMauticId;
-                    Log::logData($logFile, $mauticUser, $logMsg);
-                }
+                $assegnaSegmento = self::assegnaUtenteSegmento($auth, $mauticUserId, $segmentoMauticId);
             }
 
+            // assegna utente a campagna/e
             if (!is_null($mauticUserId) && !empty($campagnaMauticId)) {
-                // assegna utente a campagna/e
-                $campaignApi = $api->newApi("campaigns", $auth, $this->baseUrl);
-                foreach ($campagnaMauticId as $id) {
-                    $response = $campaignApi->addContact($id, $mauticUserId);
-                    if (!isset($response['success'])) {
-                        $logMsg = 'ERR assegna utente a campagna: code'.$response["errors"][0]["code"].' - '.$response["errors"][0]["message"];
-                        Log::logData($logFile, $mauticUser, $logMsg);
-                    } else {
-                        $logMsg = ' assegna utente a campagna: '.$id;
-                        Log::logData($logFile, $mauticUser, $logMsg);
-                    }
-                }
+                $assegnaCampagna = self::assegnaUtenteCampagna($auth, $mauticUserId, $campagnaMauticId);
+            }
+
+            // assegna punti a utente
+            if (!is_null($mauticUserId) && !empty($puntiDaAssegnare)) {
+                $assegnaPunti = self::assegnaPunti($auth, $mauticUserId, $puntiDaAssegnare);
+            }
+
+            // assegna stage a utente
+            if (!is_null($mauticUserId) && !empty($stageDaAssegnare)) {
+                $assegnaStage = self::assegnaUtenteStage($auth, $mauticUserId, $stageDaAssegnare);
             }
         }
     }
@@ -263,13 +240,10 @@ class plgEventbookingMautic extends JPlugin
 	{
 		$auth = self::authConfig();
         $segments = self::getSegments();
+        $stages = self::getStages();
         $mauticTags = self::getTags($auth);
         $mauticCampains = self::getCampains($auth);
-
-        //se i segmenti sono vuoti O i tags sono vuoti O le campagne sono vuote manda messaggio
-        if (is_null($segments) OR is_null($mauticTags) OR is_null($mauticCampains)) {
-            $application = Factory::getApplication();
-            $application->enqueueMessage('<b>Mautic connection problem.</b> Check plugin settings', 'error');        }
+        
         //carico i paramtri salvati
         $eventParams = self::getEventParams($row);
         $tagsIds = explode(',', $eventParams["tagsMautic"]);
@@ -280,7 +254,7 @@ class plgEventbookingMautic extends JPlugin
 		?>
 
         <div class="container">
-            <h1><i class="fas fa-mail-bulk"></i> Mautic</h1>
+            <h1 class="mb-4"><i class="fas fa-mail-bulk" style="color: #0056eb;"></i> Mautic <span class="small">ver 3.1.0</span></h1>
             <div class="row mb-4">
                 <div class="col-12 col-md-8 offset-md-4">
                     <div class="form-check form-switch" >
@@ -302,10 +276,8 @@ class plgEventbookingMautic extends JPlugin
             </div>
             <!-- segmenti -->
             <div class="row mb-3">
-                <div class="col-12 col-md-4">
-                    <label for="segmentoMautic" class="form-label fw-bold">Seleziona il segmento da assegnare all'iscritto</label>
-                </div>
-                <div class="col-12 col-md-8">
+                <div class="col-12">
+                    <label for="segmentoMautic" class="form-label fw-bold">Segmento da assegnare all'iscritto</label>
                     <select id="segmentoMautic" name="segmentoMautic" class="form-select" aria-label="Default select example">
                         <?php
                         foreach ($segments as $segmento) {
@@ -321,11 +293,9 @@ class plgEventbookingMautic extends JPlugin
                 </div>
             </div>
             <!-- tags -->
-            <div class="row mb-5">
-                <div class="col-12 col-md-4">
-                    <label for="TagsMautic" class="form-label fw-bold">Seleziona i tag da assegnare all'iscritto</label>
-                </div>
-                <div class="col-12 col-md-8">
+            <div class="row mb-3">
+                <div class="col-12">
+                    <label for="TagsMautic" class="form-label fw-bold">Tag da assegnare all'iscritto</label>
                     <select id="TagsMautic" name="tagsMautic[]" multiple class="form-select" size="10" aria-label="size 3 select example">
                         <?php foreach ($mauticTags as $mauticTag) : ?>
                             <option 
@@ -342,12 +312,41 @@ class plgEventbookingMautic extends JPlugin
                     </select> 
                 </div>
             </div>
+            <!-- stage -->
+            <div class="row mb-3">
+                <div class="col-12">
+                    <label for="stageMautic" class="form-label fw-bold">Stage da assegnare all'iscritto</label>
+                    <select id="stageMautic" name="stageMautic" class="form-select" aria-label="Default select example">
+                        <?php
+                        foreach ($stages as $stage) {
+
+                            if ($stage->id == $eventParams["stageMautic"]) {
+                                echo '<option selected value="'.$stage->id.'">'.$stage->name.'</option>';
+                            } else {
+                                echo '<option value="'.$stage->id.'">'.$stage->name.'</option>';
+                            }
+                        }
+                        ?>
+                    </select>
+                </div>
+            </div>
+
+            <!-- punti -->
+            <div class="row mb-3">
+                <div class="col-12">
+                    <label for="#puntiPagante" class="form-label fw-bold">
+                        Assegna Punti
+                    </label>
+                </div>
+                <div class="col-12">
+                    <input type="number" class="form-control" id="puntiPagante" name="puntiPagante" default="0" step="1" value="<?php echo $eventParams["puntiPagante"]; ?>" placeholder="Punti da assegnare">
+                </div>
+            </div>
+
             <!-- campagne -->
             <div class="row">
-                <div class="col-12 col-md-4">
-                    <label for="campagneMautic" class="form-label fw-bold">Seleziona le campagne da assegnare all'iscritto</label>
-                </div>
-                <div class="col-12 col-md-8">
+                <div class="col-12">
+                    <label for="campagneMautic" class="form-label fw-bold">Campagne da assegnare all'iscritto</label>
                     <select id="campainsMautic" name="campainsMautic[]" multiple class="form-select" size="10" aria-label="size 3 select example">
                     <?php foreach ($mauticCampains as $mauticCampain) : ?>
                         <option 
@@ -408,6 +407,24 @@ class plgEventbookingMautic extends JPlugin
 
     }
 
+    private function getStages() {
+        $baseUrl = $this->baseUrl;
+        $accessKey = base64_encode($this->username . ':' . $this->password);
+
+        $apiUrl = $baseUrl . '/api/stages?limit=200?orderBy=name';
+
+        $http = HttpFactory::getHttp();
+        $headers = [
+            'Authorization' => 'Basic ' . $accessKey,
+        ];
+
+        $elencoStages = $http->get($apiUrl, $headers);
+        $elencoSegmentiObj = json_decode($elencoStages->body);
+
+        return $elencoSegmentiObj->stages;
+
+    }
+
     private function getEventParams($row) {
         $event  = EventbookingHelperDatabase::getEvent($row->id);
         $params = new Registry($event->params);
@@ -415,6 +432,8 @@ class plgEventbookingMautic extends JPlugin
         $eventParams = [
             'attivazioneMautic' => $params->get('attivazioneMautic'),
             'segmentoMautic' => $params->get('segmentoMautic'),
+            'stageMautic' => $params->get('stageMautic'),
+            'puntiPagante' => $params->get('puntiPagante'),
             'tagsMautic' => $params->get('tagsMautic'),
             'campainsMautic' => $params->get('campainsMautic')
         ];
@@ -425,8 +444,14 @@ class plgEventbookingMautic extends JPlugin
     private function getTags($auth) {
         $api = new MauticApi();
         $tagApi = $api->newApi("tags", $auth, $this->baseUrl);
+        $start        = 0;
+        $orderByDir   = 'ASC';
+        $publishedOnly = true;
+        $searchFilter = '';
+        $minimal = false;
         $limit = 200;
         $orderBy = 'tag';
+
         $tags = $tagApi->getList($searchFilter, $start, $limit, $orderBy, $orderByDir, $publishedOnly, $minimal);
 
         return $tags["tags"];
@@ -439,6 +464,9 @@ class plgEventbookingMautic extends JPlugin
         $publishedOnly = 'true';
         $orderBy = 'name';
         $minimal = true;
+        $searchFilter = '';
+        $start = 0;
+        $orderByDir = 'ASC';
         $campaigns = $campaignApi->getList($searchFilter, $start, $limit, $orderBy, $orderByDir, $publishedOnly, true);
         foreach ($campaigns["campaigns"] as $item) {
             if ($item["isPublished"] == true) {
@@ -448,5 +476,168 @@ class plgEventbookingMautic extends JPlugin
         
         return $mauticCampains;
     }
+    // assegna utente a segmento
+    private function assegnaUtenteSegmento($auth, $mauticUserId, $segmentoMauticId) {
+        $logFile = JPATH_SITE.'/logs/eb-mautic-plg.txt';
+        $api = new MauticApi();
+        $segmentApi = $api->newApi("segments", $auth, $this->baseUrl);
+        $response = $segmentApi->addContact($segmentoMauticId, $mauticUserId);
 
+        // handle error
+        if (!isset($response['success'])) {
+            $logMsg = 'ERR assegna utente a segmento: code'.$response["errors"][0]["code"].' - '.$response["errors"][0]["message"];
+        } else {
+            $logMsg = ' assegna utente a segmento: '.$segmentoMauticId;
+        }
+        Log::logData($logFile, $mauticUserId, $logMsg);
+        
+        return $response;
+    }
+
+    // assegna utente a campagna/e
+    private function assegnaUtenteCampagna($auth, $mauticUserId, $campagnaMauticId) {
+        $logFile = JPATH_SITE.'/logs/eb-mautic-plg.txt';
+        $api = new MauticApi();
+        $campaignApi = $api->newApi("campaigns", $auth, $this->baseUrl);
+        foreach ($campagnaMauticId as $id) {
+            $response = $campaignApi->addContact($id, $mauticUserId);
+    
+            // handle error
+            if (!isset($response['success'])) {
+                $logMsg = 'ERR assegna utente a campagna: code'.$response["errors"][0]["code"].' - '.$response["errors"][0]["message"];
+            } else {
+                $logMsg = ' assegna utente a campagna: '.$campagnaMauticId;
+            }
+            Log::logData($logFile, $mauticUserId, $logMsg);
+        }
+
+        return $response;
+    }
+
+    //assegna punti a utente
+    private function assegnaPunti($auth, $mauticUserId, $puntiPagante) {
+        $data = array(
+            'eventName' => 'Punteggio assegnato via API da EB',
+            'actionName' => 'Adding',
+        );
+        $logFile = JPATH_SITE.'/logs/eb-mautic-plg.txt';
+        $api = new MauticApi();
+        $contactApi = $api->newApi("contacts", $auth, $this->baseUrl);
+        $response = $contactApi->addPoints($mauticUserId, $puntiPagante, $data);
+
+        // handle error
+        if (!isset($response['success'])) {
+            $logMsg = 'ERR assegna punti autente: code'.$response["errors"][0]["code"].' - '.$response["errors"][0]["message"];
+            $data = [
+                'mauticUserId' => $mauticUserId,
+                'punti' => $puntiPagante,
+            ];
+        } else {
+            $logMsg = ' assegna punti autente id: '.$$mauticUserId;
+            $data = [
+                'mauticUserId' => $mauticUserId,
+                'punti' => $puntiPagante,
+            ];
+        }
+        Log::logData($logFile, $data, $logMsg);
+        return $response;
+    }
+
+    //assegna stage a utente
+    private function assegnaUtenteStage($auth, $mauticUserId, $stageDaAssegnare) {
+        $logFile = JPATH_SITE.'/logs/eb-mautic-plg.txt';
+        $api = new MauticApi();
+        $stagetApi = $api->newApi("stages", $auth, $this->baseUrl);
+        $response = $stagetApi->addContact($stageDaAssegnare, $mauticUserId);
+
+        // handle error
+        if (!isset($response['success'])) {
+            $logMsg = 'ERR assegna utente a stage: code'.$response["errors"][0]["code"].' - '.$response["errors"][0]["message"];
+            $data = [
+                'mauticUserId' => $mauticUserId,
+                'stage' => $stageDaAssegnare,
+            ];
+        } else {
+            $logMsg = ' assegna utente a stage: '.$stageDaAssegnare;
+            $data = [
+                'mauticUserId' => $mauticUserId,
+                'stage' => $stageDaAssegnare,
+            ];
+        }
+        Log::logData($logFile, $data, $logMsg);
+        return $response;
+    }
+
+    //assegno utente a company
+    private function assegnaUtenteCompany($auth, $mauticUserId, $companyId) {
+        if (!is_null($mauticUserId)) {
+            $companyId = 4;
+            $logFile = JPATH_SITE.'/logs/eb-mautic-plg.txt';
+            $api = new MauticApi();
+            $companyAPI = $api->newApi("companies", $auth, $this->baseUrl);
+            $response = $companyAPI->addContact($companyId, $mauticUserId);
+
+            // handle error
+            if (!isset($response['success'])) {
+                $logMsg = 'ERR assegna utente a company: code'.$response["errors"][0]["code"].' - '.$response["errors"][0]["message"];
+                $data = [
+                    'mauticUserId' => $mauticUserId,
+                    'companyId' => $companyId,
+                ];
+            } else {
+                $logMsg = ' assegna utente a company id: '.$companyId;
+                $data = [
+                    'mauticUserId' => $mauticUserId,
+                    'companyId' => $companyId,
+                ];
+            }
+            Log::logData($logFile, $data, $logMsg);
+        }
+        return $response;
+    }
+
+    private function getMauticUserId($auth, $mauticUser, $row) {
+        $logFile = JPATH_SITE.'/logs/mp-mautic-plg.txt';
+        //cerco utente in mautic
+        $api        = new MauticApi();
+        $contactApi = $api->newApi("contacts", $auth, $this->baseUrl);
+        $searchFilter = 'email:'.$row->email;
+        $start        = 0;
+        $limit        = 0;
+        $orderBy      = '';
+        $orderByDir   = 'ASC';
+        $publishedOnly = true;
+
+        $contacts = $contactApi->getList($searchFilter, $start, $limit, $orderBy, $orderByDir, $publishedOnly, true);
+
+        //se non esiste lo creo
+        if ($contacts["total"] == 0) {
+            // creazione utente
+            $contact = $contactApi->create($mauticUser);
+            $mauticUserId = $contact["contact"]["id"];
+
+            //log
+            $logMsg = 'Creazione contatto: '.$mauticUserId;
+            Log::logData($logFile, $mauticUser, $logMsg);
+
+        } else {
+            //se esiste lo aggiorno
+            $propertiesNames = array_keys($contacts["contacts"]);
+            $mauticUserId = $propertiesNames[0];
+            if (!is_null($mauticUserId)) {
+                // 
+                $createIfNotFound = true;
+                $contact = $contactApi->edit($mauticUserId, $mauticUser, $createIfNotFound);
+                $mauticUserId = $contact["contact"]["id"];
+                //log
+                $logMsg = 'Aggiornamento contatto:'.$mauticUserId;
+                $data = [
+                    'mauticUserId' => $mauticUserId,
+                    'email' => $row->email,
+                ];
+                Log::logData($logFile, $data, $logMsg);
+            }
+        }
+        return $mauticUserId;
+    }
 }
