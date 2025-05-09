@@ -5,7 +5,7 @@
  * @author             Lorenzo Giovannini
  * @copyright          Copyright (C) 2010 - 2020 Istituto Medicina Naturale
  * @license            GNU/GPL, see LICENSE.php
- * @version             2.0
+ * @version             3.1.0
  * @note                aggiornato il campo professione
  */
 
@@ -173,9 +173,7 @@ class plgEventbookingMautic extends JPlugin
         $eventParams = new Registry($event->params);
         
         if ($eventParams->get('attivazioneMautic') == 'on') {
-        
-            $logFile = JPATH_SITE.'/logs/eb-mautic-plg.txt';
-
+            //carico i paramtri salvati
             $segmentoMauticId = $eventParams->get('segmentoMautic');
             $tagsMauticIds = $eventParams->get('tagsMautic');
             $campagnaMauticId = $eventParams->get('campainsMautic');;
